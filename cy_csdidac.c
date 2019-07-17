@@ -1,6 +1,6 @@
 /***************************************************************************//**
 * \file cy_csdidac.c
-* \version 1.0
+* \version 2.0
 *
 * \brief
 * This file provides the CSD HW block IDAC functionality implementation.
@@ -12,6 +12,8 @@
 * disclaimers, and limitations in the end user license agreement accompanying
 * the software package with which this file was provided.
 *******************************************************************************/
+
+
 #include "cy_device_headers.h"
 #include "cy_syslib.h"
 #include "cy_syspm.h"
@@ -19,14 +21,19 @@
 #include "cy_gpio.h"
 #include "cy_csd.h"
 
+#if defined(CY_IP_MXCSDV2)
+
+
 /*******************************************************************************
-* Function Prototypes - internal functions
+* Function Prototypes - Internal Functions
 *******************************************************************************/
 /**
 * \cond SECTION_CSDIDAC_INTERNAL
 * \addtogroup group_csdidac_internal
 * \{
 */
+static void Cy_CSDIDAC_ConnectChannelA(cy_stc_csdidac_context_t * context);
+static void Cy_CSDIDAC_ConnectChannelB(cy_stc_csdidac_context_t * context);
 static void Cy_CSDIDAC_DisconnectChannelA(cy_stc_csdidac_context_t * context);
 static void Cy_CSDIDAC_DisconnectChannelB(cy_stc_csdidac_context_t * context);
 /** \}
@@ -34,25 +41,25 @@ static void Cy_CSDIDAC_DisconnectChannelB(cy_stc_csdidac_context_t * context);
 
 
 /*******************************************************************************
-* Local definition
+* Local Definition
 *******************************************************************************/
 #define CY_CSDIDAC_FSM_ABORT                        (0x08u)
 
-/* Idac configuration register */
+/* IDAC configuration register */
 /* +--------+---------------+-------------------------------------------------------------------+
  * |  BITS  |   FIELD       |             DEFAULT MODE                                          |
  * |--------|---------------|-------------------------------------------------------------------|
- * | 6:0    | VAL           | 0x00(Set IDAC value to "0")                                       |
- * | 7      | POL_STATIC    | 0x00(Set static IDAC polarity)                                    |
+ * | 6:0    | VAL           | 0x00(Sets the IDAC value to "0")                                  |
+ * | 7      | POL_STATIC    | 0x00(Sets the static IDAC polarity)                               |
  * | 9:8    | POLARITY      | 0x00(IDAC polarity SOURCE)                                        |
  * | 11:10  | BAL_MODE      | 0x00(IDAC is enabled in PHI2 and disabled at the end of balancing)|
- * | 17:16  | LEG1_MODE     | 0x00(Configure LEG1 to GP_static mode)                            |
- * | 19:18  | LEG2_MODE     | 0x00(Configure LEG1 to GP_static mode)                            |
- * | 21     | DSI_CTRL_EN   | 0x00(IDAC DSI control is disabled)                                |
- * | 23:22  | RANGE         | 0x00(Set range parameter value to LOW: 1LSB = 37.5 nA)            |
- * | 24     | LEG1_EN       | 0x00(Output for LEG1 is disabled)                                 |
- * | 25     | LEG2_EN       | 0x00(Output for LEG2 is disabled)                                 |
- * +--------+---------------+--------------------------------------------------------------------+*/
+ * | 17:16  | LEG1_MODE     | 0x00(Configures LEG1 to GP_static mode)                           |
+ * | 19:18  | LEG2_MODE     | 0x00(Configures LEG1 to GP_static mode)                           |
+ * | 21     | DSI_CTRL_EN   | 0x00(The IDAC DSI control is disabled)                            |
+ * | 23:22  | RANGE         | 0x00(Sets the range parameter value to low: 1LSB = 37.5 nA)       |
+ * | 24     | LEG1_EN       | 0x00(The output for LEG1 is disabled)                             |
+ * | 25     | LEG2_EN       | 0x00(The output for LEG2 is disabled)                             |
+ * +--------+---------------+-------------------------------------------------------------------+*/
 #define CY_CSDIDAC_DEFAULT_CFG                      (0x01800000uL)
 #define CY_CSDIDAC_POLARITY_POS                     (8uL)
 #define CY_CSDIDAC_POLARITY_MASK                    (3uL << CY_CSDIDAC_POLARITY_POS)
@@ -65,20 +72,27 @@ static void Cy_CSDIDAC_DisconnectChannelB(cy_stc_csdidac_context_t * context);
 #define CY_CSDIDAC_RANGE_MASK                       (CY_CSDIDAC_LSB_MASK | CY_CSDIDAC_LEG1_EN_MASK | CY_CSDIDAC_LEG2_EN_MASK)
 
 /* 
-* All defines below correspond to IDAC LSB in nA. As the 
-* lowest LSB is 37.5 nA, its define is increased for 10 times.
-* This is taken into account when IDAC code is calculated.
+* All the defines below correspond to IDAC LSB in pA
 */
-#define CY_CSDIDAC_LSB_37                           (375u)
-#define CY_CSDIDAC_LSB_75                           (75u)
-#define CY_CSDIDAC_LSB_300                          (300u)
-#define CY_CSDIDAC_LSB_600                          (600u)
-#define CY_CSDIDAC_LSB_2400                         (2400u)
-#define CY_CSDIDAC_LSB_4800                         (4800u)
+#define CY_CSDIDAC_LSB_37                           (  37500u)
+#define CY_CSDIDAC_LSB_75                           (  75000u)
+#define CY_CSDIDAC_LSB_300                          ( 300000u)
+#define CY_CSDIDAC_LSB_600                          ( 600000u)
+#define CY_CSDIDAC_LSB_2400                         (2400000u)
+#define CY_CSDIDAC_LSB_4800                         (4800000u)
+
+#define CY_CSDIDAC_LSB_37_MAX_CURRENT             (  4762500u)
+#define CY_CSDIDAC_LSB_75_MAX_CURRENT             (  9525000u)
+#define CY_CSDIDAC_LSB_300_MAX_CURRENT            ( 38100000u)
+#define CY_CSDIDAC_LSB_600_MAX_CURRENT            ( 76200000u)
+#define CY_CSDIDAC_LSB_2400_MAX_CURRENT           (304800000u)
+#define CY_CSDIDAC_LSB_4800_MAX_CURRENT           (609600000u)
 
 #define CY_CSDIDAC_CODE_MASK                        (127u)
 #define CY_CSDIDAC_CONST_2                          (2u)
 #define CY_CSDIDAC_CONST_10                         (10u)
+#define CY_CSDIDAC_CONST_1000                       (1000u)
+#define CY_CSDIDAC_CONST_1000000                    (1000000u)
 
 /* CSD HW block CONFIG register definitions */
 #define CY_CSDIDAC_CSD_REG_CONFIG_INIT              (0x80001000uL)
@@ -101,6 +115,7 @@ static void Cy_CSDIDAC_DisconnectChannelB(cy_stc_csdidac_context_t * context);
 #define CY_CSDIDAC_SW_BYPA_ENABLE                   (0x00001000uL)
 #define CY_CSDIDAC_SW_BYPB_ENABLE                   (0x00010000uL)
 #define CY_CSDIDAC_SW_REFGEN_SEL_IBCB_ON            (0x00000010uL)
+#define CY_CSDIDAC_SW_REFGEN_SEL_IAIB_ON            (0x00000001uL)
 
 #define CY_CSDIDAC_CSD_CONFIG_DEFAULT  {\
     .config         = 0x80001000uL,\
@@ -156,41 +171,43 @@ static void Cy_CSDIDAC_DisconnectChannelB(cy_stc_csdidac_context_t * context);
 * Initializes the CSDIDAC middleware. Acquires, locks, and initializes 
 * the CSD HW block by using the low-level CSD driver.
 * The function performs the following tasks:
-* * Verifies input parameters. The CY_CSDIDAC_BAD_PARAM is returned if
+* * Verifies the input parameters. The CY_CSDIDAC_BAD_PARAM is returned if
 *   verification fails.
 * * Acquires and locks the CSD HW block for use of the CSDIDAC, if the CSD HW
 *   block is in a free state.
-* * If the CSD HW block is acquired, it is initialized with a default
-*   configuration of the CSDIDAC middleware. Output pins are not connected to
-*   the CSD HW block. Outputs are disabled and CY_CSDIDAC_SUCCESS is returned.
+* * If the CSD HW block is acquired, it is initialized with 
+*   the CSDIDAC middleware by the default configuration. 
+*   The output pins are not connected to the CSD HW block. 
+*   The outputs are disabled and CY_CSDIDAC_SUCCESS is returned.
 * 
-* To connect an output pin and enable an output current the 
+* To connect an output pin and enable an output current, the 
 * Cy_CSDIDAC_OutputEnable() or Cy_CSDIDAC_OutputEnableExt() functions 
-* should be used.
-* If the CSD HW block is unavailable, CY_CSDIDAC_HW_BUSY status is returned,
-* and the CSDIDAC middleware must wait for the CSD HW block to be in idle
+* are used.
+* If there is no CSD HW block, the CY_CSDIDAC_HW_BUSY status is returned,
+* and the CSDIDAC middleware waits for the CSD HW block to be in the idle
 * state to initialize.
 *
 * \param config
 * The pointer to the configuration structure \ref cy_stc_csdidac_config_t that 
-* contains the initial configuration data of the CSDIDAC MW, generated 
+* contains the CSDIDAC middleware initial configuration data generated 
 * by the CSD personality of the ModusToolbox Device Configurator tool.
 *
 * \param context
 * The pointer to the CSDIDAC context structure \ref cy_stc_csdidac_context_t
-* passed by the user. After the initialization, this structure will contain 
+* passed by the user. After the initialization, this structure contains 
 * both CSDIDAC configuration and internal data. It is used during the whole 
 * CSDIDAC operation.
 *
 * \return
 * The function returns the status of its operation.
-* * CY_CSDIDAC_SUCCESS   - The initialization successfully completed.
-* * CY_CSDIDAC_HW_LOCKED - The CSD HW block is already in use by another
-*                          middleware. CSDIDAC middleware must wait until 
-*                          the CSD HW block returns to the idle state to 
-*                          initialize it. The initialization is not completed.
-* * CY_CSDIDAC_BAD_PARAM - Input pointers are NULL or invalid. 
-*                          The initialization is not completed.
+* * CY_CSDIDAC_SUCCESS           - The operation is performed successfully.
+* * CY_CSDIDAC_BAD_PARAM         - The input pointer is NULL or an invalid 
+*                                  parameter is passed.
+* * CY_CSDIDAC_HW_LOCKED         - The CSD HW block is already in use by other
+*                                  middleware.
+* * CY_CSDIDAC_HW_FAILURE        - The CSD HW block failure.
+* * CY_CSDIDAC_BAD_CONFIGURATION - The CSDIDAC configuration structure 
+*                                  initialization issue.
 *
 *******************************************************************************/
 cy_en_csdidac_status_t Cy_CSDIDAC_Init(
@@ -201,21 +218,24 @@ cy_en_csdidac_status_t Cy_CSDIDAC_Init(
 
     if ((NULL != config) && (NULL != context))
     {
-        /* Copy the configuration structure to the context */
-        context->cfgCopy = *config;
-        /* Capture the CSD HW block for the IDAC functionality */
-        result = Cy_CSDIDAC_Restore(context);
-        if (CY_CSDIDAC_SUCCESS == result)
+        if(true == Cy_CSDIDAC_IsIdacConfigValid(config))
         {
-            /* Disconnect all CSDIDAC channels */
-            Cy_CSDIDAC_DisconnectChannelA(context);
-            Cy_CSDIDAC_DisconnectChannelB(context);
-            /* Wake-up the CSD HW block */
-            (void)Cy_CSDIDAC_Wakeup(context);
+            /* Copies the configuration structure to the context. */
+            context->cfgCopy = *config;
+            /* Captures the CSD HW block for the IDAC functionality. */
+            result = Cy_CSDIDAC_Restore(context);
+            if (CY_CSDIDAC_SUCCESS == result)
+            {
+                /* Disconnects all CSDIDAC channels. */
+                Cy_CSDIDAC_DisconnectChannelA(context);
+                Cy_CSDIDAC_DisconnectChannelB(context);
+                /* Wakes up the CSD HW block. */
+                (void)Cy_CSDIDAC_Wakeup(context);
+            }
         }
         else
         {
-            result = CY_CSDIDAC_HW_LOCKED;
+            result = CY_CSDIDAC_BAD_CONFIGURATION;
         }
     }
 
@@ -237,9 +257,9 @@ cy_en_csdidac_status_t Cy_CSDIDAC_Init(
 * 
 * When the middleware operation is stopped by the Cy_CSDIDAC_DeInit()
 * function, a subsequent call of the Cy_CSDIDAC_Init() function repeats the
-* initialization process. However, to implement time-multiplexed mode 
+* initialization process. However, to implement Time-multiplexed mode 
 * (sharing the CSD HW Block between multiple middleware), 
-* the Cy_CSDIDAC_Save() and Cy_CSDIDAC_Restore() functions should be used 
+* the Cy_CSDIDAC_Save() and Cy_CSDIDAC_Restore() functions are used 
 * instead of the Cy_CSDIDAC_DeInit() and Cy_CSDIDAC_Init() functions.
 *
 * \param context
@@ -247,14 +267,12 @@ cy_en_csdidac_status_t Cy_CSDIDAC_Init(
 *
 * \return
 * The function returns the status of its operation.
-* * CY_CSDIDAC_SUCCESS   - De-Initialization successfully completed.
-* * CY_CSDIDAC_BAD_PARAM - The input pointer is null. De-initialization
-*                          is not completed.
-* * CY_CSDIDAC_HW_LOCKED - The CSD HW block is already in use by another
-*                          Middleware or application. CSDIDAC middleware 
-*                          no long owns the specified CSD HW block. 
-*                          In other words, de-initialization may have 
-*                          been previously completed.
+* * CY_CSDIDAC_SUCCESS           - The operation is performed successfully.
+* * CY_CSDIDAC_BAD_PARAM         - The input pointer is NULL or an invalid 
+*                                  parameter is passed.
+* * CY_CSDIDAC_HW_LOCKED         - The CSD HW block is already in use by other
+*                                  middleware.
+* * CY_CSDIDAC_HW_FAILURE        - A CSD HW block failure.
 *
 *******************************************************************************/
 cy_en_csdidac_status_t Cy_CSDIDAC_DeInit(cy_stc_csdidac_context_t * context)
@@ -271,16 +289,13 @@ cy_en_csdidac_status_t Cy_CSDIDAC_DeInit(cy_stc_csdidac_context_t * context)
 *
 * This function sets the desired CSDIDAC middleware configuration.
 * The function performs the following:
-* * Verifies input parameters 
+* * Verifies the input parameters 
 * * Verifies whether the CSD HW block is captured by the CSDIDAC middleware 
 *   and that there are no active IDAC outputs.
 * * Initializes the CSD HW block registers with data passed through the
 *   config parameter of this function if the above verifications are
-*   successful 
-* * Disconnects outputs and sets the CSD HW block to the default state for
-*   CSDIDAC operations. To enable output(s), the user should call
-*   Cy_CSDIDAC_OutputEnable() later.
-* * Returns status code regarding the function execution result 
+*   successful.
+* * Returns the status code regarding the function execution result.
 *
 * \param config
 * The pointer to the CSDIDAC configuration structure to be updated.
@@ -290,13 +305,15 @@ cy_en_csdidac_status_t Cy_CSDIDAC_DeInit(cy_stc_csdidac_context_t * context)
 *
 * \return
 * The function returns the status of its operation.
-* * CY_CSDIDAC_SUCCESS   - The operation is completed successfully.
-* * CY_CSDIDAC_BAD_PARAM - A context pointer or config pointer
-*                          is equal to NULL. The operation was not completed.
-* * CY_CSDIDAC_HW_BUSY   - Any IDAC output is enabled. The operation can not 
-*                          be completed.
-* * CY_CSDIDAC_HW_LOCKED - The CSD HW block is not captured by CSDIDAC 
-*                          middleware.
+* * CY_CSDIDAC_SUCCESS           - The operation is performed successfully.
+* * CY_CSDIDAC_BAD_PARAM         - The input pointer is NULL or an invalid 
+*                                  parameter is passed.
+* * CY_CSDIDAC_HW_BUSY           - Any IDAC output is enabled. The operation 
+*                                  cannot be completed.
+* * CY_CSDIDAC_HW_LOCKED         - The CSD HW block is already in use by other
+*                                  middleware.
+* * CY_CSDIDAC_BAD_CONFIGURATION - The CSDIDAC configuration structure 
+*                                  initialization issue.
 *
 *******************************************************************************/
 cy_en_csdidac_status_t Cy_CSDIDAC_WriteConfig(
@@ -304,37 +321,43 @@ cy_en_csdidac_status_t Cy_CSDIDAC_WriteConfig(
                 cy_stc_csdidac_context_t * context)
 {
     cy_en_csdidac_status_t result = CY_CSDIDAC_BAD_PARAM;
-    uint32_t swBypSelValue = 0u;
+    uint32_t tmpRegValue = CY_CSDIDAC_SW_REFGEN_SEL_IBCB_ON;
     
     if ((NULL != config) && (NULL != context))
     {
-        if (CY_CSD_IDAC_KEY == Cy_CSD_GetLockStatus(context->cfgCopy.base, context->cfgCopy.csdCxtPtr))
+        if(true == Cy_CSDIDAC_IsIdacConfigValid(config))
         {
-            if ((CY_CSDIDAC_DISABLE == context->channelStateA) && (CY_CSDIDAC_DISABLE == context->channelStateB))
+            if (CY_CSD_IDAC_KEY == Cy_CSD_GetLockStatus(context->cfgCopy.base, context->cfgCopy.csdCxtPtr))
             {
-                /* Copy the configuration structure to the context */
-                context->cfgCopy = *config;
-                
-                /* Configure CSDIDAC middleware with a new configuration */
-                if ((NULL != context->cfgCopy.ptrPinA) ||  (CY_CSDIDAC_ENABLE == context->cfgCopy.busOnlyA))
+                if ((CY_CSDIDAC_DISABLE == context->channelStateA) && (CY_CSDIDAC_DISABLE == context->channelStateB))
                 {
-                    swBypSelValue |= CY_CSDIDAC_SW_BYPA_ENABLE;
+                    /* Copies the configuration structure to the context. */
+                    context->cfgCopy = *config;
+
+                    /* Disconnects the IDACs from AMUX buses. */
+                    Cy_CSD_WriteReg(context->cfgCopy.base, CY_CSD_REG_OFFSET_SW_BYP_SEL, 0u);
+
+                    /* Closes the IAIB switch if IDACs joined. */
+                    if ((CY_CSDIDAC_JOIN == context->cfgCopy.configA) || (CY_CSDIDAC_JOIN == context->cfgCopy.configB))
+                    {
+                        tmpRegValue |= CY_CSDIDAC_SW_REFGEN_SEL_IAIB_ON;
+                    }
+                    Cy_CSD_WriteReg(context->cfgCopy.base, CY_CSD_REG_OFFSET_SW_REFGEN_SEL, tmpRegValue);
+                    result = CY_CSDIDAC_SUCCESS;
                 }
-                if ((NULL != context->cfgCopy.ptrPinB) ||  (CY_CSDIDAC_ENABLE == context->cfgCopy.busOnlyB))
+                else
                 {
-                    swBypSelValue |= CY_CSDIDAC_SW_BYPB_ENABLE;
+                    result = CY_CSDIDAC_HW_BUSY;
                 }
-                Cy_CSD_WriteReg(context->cfgCopy.base, CY_CSD_REG_OFFSET_SW_BYP_SEL, swBypSelValue);
-                result = CY_CSDIDAC_SUCCESS;
             }
             else
             {
-                result = CY_CSDIDAC_HW_BUSY;
+                result = CY_CSDIDAC_HW_LOCKED;
             }
         }
         else
         {
-            result = CY_CSDIDAC_HW_LOCKED;
+            result = CY_CSDIDAC_BAD_CONFIGURATION;
         }
     }
 
@@ -346,21 +369,20 @@ cy_en_csdidac_status_t Cy_CSDIDAC_WriteConfig(
 * Function Name: Cy_CSDIDAC_Wakeup
 ****************************************************************************//**
 *
-* Provide a delay required for the CSD HW block to settle after a wakeup
-* from Deep Sleep.
+* Provides a delay required for the CSD HW block to settle after a wakeup
+* from CPU / System Deep Sleep.
 *
-* This function provides a delay after exiting Deep Sleep. In Deep Sleep 
-* power mode, the CSD HW is powered off and an extra delay is required 
-* to establish correct operation of the CSD HW block.
+* This function provides a delay after exiting CPU / System Deep Sleep.  
+* After the CSD HW block has been powered off, an extra delay is required 
+* to establish the CSD HW block correct operation.
 *
 * \param context
 * The pointer to the CSDIDAC context structure \ref cy_stc_csdidac_context_t.
 *
 * \return
 * The function returns the status of its operation.
-* * CY_CSDIDAC_SUCCESS   - The operation is completed successfully.
-* * CY_CSDIDAC_BAD_PARAM - A context pointer is equal to NULL.
-*                          The operation was not completed.
+* * CY_CSDIDAC_SUCCESS   - The operation is performed successfully.
+* * CY_CSDIDAC_BAD_PARAM - The input pointer is NULL.
 *
 *******************************************************************************/
 cy_en_csdidac_status_t Cy_CSDIDAC_Wakeup(const cy_stc_csdidac_context_t * context)
@@ -381,26 +403,31 @@ cy_en_csdidac_status_t Cy_CSDIDAC_Wakeup(const cy_stc_csdidac_context_t * contex
 * Function Name: Cy_CSDIDAC_DeepSleepCallback
 ****************************************************************************//**
 *
-* Callback to prepare the CSDIDAC before entering Deep Sleep.
+* The callback function to prepare the CSDIDAC before entering CPU / System Deep Sleep.
 *
-* This function handles the Active to Deep Sleep power mode transition
+* This function handles CPU active to CPU / System Deep Sleep power mode transition
 * for the CSDIDAC middleware.
 * Calling this function directly from the application program is not 
-* recommended. Instead, Cy_SysPm_DeepSleep() should be used for 
-* the Active to Deep Sleep power mode transition of the device.
+* recommended. Instead, Cy_SysPm_CpuEnterDeepSleep() is used for CPU active to 
+* CPU / System Deep Sleep power mode transition of the device.
+* \note
+* After the CPU Deep Sleep transition, the device automatically goes 
+* to System Deep Sleep if all conditions are fulfilled: another core is 
+* in CPU Deep Sleep, all the peripherals are ready to System Deep Sleep, etc.
+* (see details in the device TRM).
 *
-* For proper operation of the CSDIDAC middleware during the Active to
-* Deep Sleep mode transition, a callback to this API should be registered
+* For the CSDIDAC middleware correct operation during CPU active to
+* CPU / System Deep Sleep mode transition, a callback to this API is registered
 * using the Cy_SysPm_RegisterCallback() function with CY_SYSPM_DEEPSLEEP
 * type. After the callback is registered, this function is called by the
-* Cy_SysPm_DeepSleep() function to prepare the middleware for the device
+* Cy_SysPm_CpuEnterDeepSleep() function to prepare the middleware for the device
 * power mode transition.
 *
 * When this function is called with CY_SYSPM_CHECK_READY as an input, this
 * function returns CY_SYSPM_SUCCESS if no output is enabled. Otherwise,
 * CY_SYSPM_FAIL is returned. If CY_SYSPM_FAIL status is returned, a device
-* cannot change the power mode. To provide such a transition, the application
-* program should disable all the enabled IDAC outputs.
+* cannot change power mode. To provide such a transition, the application
+* program disables all the enabled IDAC outputs.
 *
 * \param callbackParams
 * Refer to the description of the cy_stc_syspm_callback_params_t type in the
@@ -412,8 +439,8 @@ cy_en_csdidac_status_t Cy_CSDIDAC_Wakeup(const cy_stc_csdidac_context_t * contex
 *
 * \return
 * Returns the status of the operation requested by the mode parameter:
-* * CY_SYSPM_SUCCESS  - Deep Sleep power mode can be entered.
-* * CY_SYSPM_FAIL     - Deep Sleep power mode cannot be entered.
+* * CY_SYSPM_SUCCESS  - CPU / System Deep Sleep power mode can be entered.
+* * CY_SYSPM_FAIL     - CPU / System Deep Sleep power mode cannot be entered.
 *
 *******************************************************************************/
 cy_en_syspm_status_t Cy_CSDIDAC_DeepSleepCallback(
@@ -424,7 +451,7 @@ cy_en_syspm_status_t Cy_CSDIDAC_DeepSleepCallback(
     cy_stc_csdidac_context_t * csdIdacCxt = (cy_stc_csdidac_context_t *) callbackParams->context;
 
     if (CY_SYSPM_CHECK_READY == mode)
-    { /* Actions that should be done before entering the Deep Sleep mode */
+    { /* Actions before entering CPU / System Deep Sleep */
         if ((CY_CSD_IDAC_KEY == Cy_CSD_GetLockStatus(csdIdacCxt->cfgCopy.base, csdIdacCxt->cfgCopy.csdCxtPtr)) &&
            ((CY_CSDIDAC_ENABLE == csdIdacCxt->channelStateA) || (CY_CSDIDAC_ENABLE == csdIdacCxt->channelStateB)))
         {
@@ -432,7 +459,7 @@ cy_en_syspm_status_t Cy_CSDIDAC_DeepSleepCallback(
         }
     }
 
-    return(retVal);
+    return (retVal);
 }
 
 
@@ -445,14 +472,14 @@ cy_en_syspm_status_t Cy_CSDIDAC_DeepSleepCallback(
 *
 * This function, along with Cy_CSDIDAC_Restore(), is specifically designed
 * to support time multiplexing of the CSD HW block between multiple
-* middleware. When the CSD HW block is shared by two or more middleware,
-* this function can be used to save the current state of CSDIDAC middleware and
-* the CSD HW block prior to releasing the CSD HW block for use by another
+* middleware. When the CSD HW block is shared by more than one middleware,
+* this function can be used to save the current state of the CSDIDAC middleware 
+* and the CSD HW block prior to releasing the CSD HW block for use by other
 * middleware.
 * 
 * This function performs the following operations:
 * * Saves the current configuration of the CSD HW block and CSDIDAC middleware.
-* * Configures output pins to the default state and disconnects them from 
+* * Configures the output pins to the default state and disconnects them from 
 * the CSD HW block. Releases the CSD HW block.
 *
 * \param context
@@ -460,12 +487,13 @@ cy_en_syspm_status_t Cy_CSDIDAC_DeepSleepCallback(
 *
 * \return
 * The function returns the status of its operation.
-* * CY_CSDIDAC_SUCCESS   - Save operation successfully completed.
-* * CY_CSDIDAC_BAD_PARAM - Input pointer is null or invalid. The operation is
-*                          not completed.
-* * CY_CSDIDAC_HW_LOCKED - The CSD HW block is already in use by another 
-*                          middleware. CSDIDAC middleware cannot save state 
-*                          without initialization or restore operation.
+* * CY_CSDIDAC_SUCCESS      - The operation is performed successfully.
+* * CY_CSDIDAC_BAD_PARAM    - The input pointer is NULL or an invalid parameter
+*                             is passed. The operation is not completed.
+* * CY_CSDIDAC_HW_LOCKED    - The CSD HW block is already in use by other middleware. 
+*                             The CSDIDAC middleware cannot save the state
+*                             without the initialization or restore operation.
+* * CY_CSDIDAC_HW_FAILURE   - A CSD HW block failure.
 *
 *******************************************************************************/
 cy_en_csdidac_status_t Cy_CSDIDAC_Save(cy_stc_csdidac_context_t * context)
@@ -475,16 +503,23 @@ cy_en_csdidac_status_t Cy_CSDIDAC_Save(cy_stc_csdidac_context_t * context)
 
     if (NULL != context)
     {
-        /* Release the HW CSD block */
-        initStatus = Cy_CSD_DeInit(context->cfgCopy.base, CY_CSD_IDAC_KEY, context->cfgCopy.csdCxtPtr);
-
-        if (CY_CSD_SUCCESS == initStatus)
+        if (CY_CSD_IDAC_KEY == Cy_CSD_GetLockStatus(context->cfgCopy.base, context->cfgCopy.csdCxtPtr))
         {
-            /* Disconnect output channels pins from analog busses */
+            /* Disconnects the output channels pins from analog buses. */
             Cy_CSDIDAC_DisconnectChannelA(context);
             Cy_CSDIDAC_DisconnectChannelB(context);
 
-            result = CY_CSDIDAC_SUCCESS;
+            /* Releases the HW CSD block. */
+            initStatus = Cy_CSD_DeInit(context->cfgCopy.base, CY_CSD_IDAC_KEY, context->cfgCopy.csdCxtPtr);
+            
+            if (CY_CSD_SUCCESS == initStatus)
+            {
+                result = CY_CSDIDAC_SUCCESS;
+            }
+            else
+            {
+                result = CY_CSDIDAC_HW_FAILURE;
+            }    
         }
         else
         {
@@ -492,7 +527,7 @@ cy_en_csdidac_status_t Cy_CSDIDAC_Save(cy_stc_csdidac_context_t * context)
         }
     }
 
-    return result;
+    return (result);
 }
 
 
@@ -504,95 +539,89 @@ cy_en_csdidac_status_t Cy_CSDIDAC_Save(cy_stc_csdidac_context_t * context)
 * called previously.
 *
 * This function, along with the Cy_CSDIDAC_Save() function, is specifically 
-* designed for ease of use and supports time multiplexing of the CSD HW block 
-* among multiple middleware. When the CSD HW block is shared by two or more
-* middleware, this function can be used to restore the previous state of 
-* the CSD HW block and the CSDIDAC middleware saved using the 
-* Cy_CSDIDAC_Save() function. 
+* designed to support the CSD HW block time-multiplexing
+* among multiple middleware. When the CSD HW block is shared by more than one
+* middleware, this function can be used to restore the CSD HW block previous  
+* state and the CSDIDAC middleware saved using the Cy_CSDIDAC_Save() function. 
 * 
-* This function performs the part tasks of the Cy_CSDIDAC_Init() function, 
+* This function performs the Cy_CSDIDAC_Init() function, part tasks 
 * namely captures the CSD HW block. Use the Cy_CSDIDAC_Save() and 
-* Cy_CSDIDAC_Restore() functions to implement time-multiplexed mode 
+* Cy_CSDIDAC_Restore() functions to implement Time-multiplexed mode 
 * instead of using the Cy_CSDIDAC_DeInit() and Cy_CSDIDAC_Init() functions.
 *
 * \param context
-* The pointer to the CSDIDAC middleware context structure \ref cy_stc_csdidac_context_t.
+* The pointer to the CSDIDAC middleware context 
+* structure \ref cy_stc_csdidac_context_t.
 *
 * \return
 * The function returns the status of its operation.
-* * CY_CSDIDAC_SUCCESS   - Restore operation successfully completed.
-* * CY_CSDIDAC_BAD_PARAM - Input pointers are null or invalid; initialization
-*                          incomplete.
-* * CY_CSDIDAC_HW_BUSY   - The CSD HW block is already in use and the CSDIDAC
-*                          middleware cannot restore the state 
-*                          without an initialization.
-* * CY_CSDIDAC_HW_LOCKED - The CSD HW block is acquired and locked 
-*                          by another middleware or an application. 
-*                          The CSDIDAC middleware must wait for the CSD HW block 
-*                          to be released to acquire it for use.
+* * CY_CSDIDAC_SUCCESS           - The operation is performed successfully.
+* * CY_CSDIDAC_BAD_PARAM         - The input pointer is NULL or an invalid 
+*                                  parameter is passed.
+* * CY_CSDIDAC_HW_LOCKED         - The CSD HW block is already in use by 
+*                                  another middleware.
+* * CY_CSDIDAC_HW_FAILURE        - The CSD HW block failure.
 *
 *******************************************************************************/
 cy_en_csdidac_status_t Cy_CSDIDAC_Restore(cy_stc_csdidac_context_t * context)
 {
     uint32_t watchdogCounter;
 
-    cy_en_csdidac_status_t result = CY_CSDIDAC_BAD_PARAM;
+    cy_en_csdidac_status_t result = CY_CSDIDAC_HW_FAILURE;
     cy_en_csd_key_t mvKey;
     cy_en_csd_status_t initStatus = CY_CSD_LOCKED;
     CSD_Type * ptrCsdBaseAdd = context->cfgCopy.base;
     cy_stc_csd_context_t * ptrCsdCxt = context->cfgCopy.csdCxtPtr;
     cy_stc_csd_config_t csdCfg = CY_CSDIDAC_CSD_CONFIG_DEFAULT;
-    /* An approximate duration of the watchdog waiting loop in cycles*/
-    const uint32_t intrInitLoopDuration = 5uL;
-    /* An initial watchdog timeout in seconds */
-    const uint32_t initWatchdogTimeS = 1uL;
+
+    /* The number of cycles of one for() loop. */
+    const uint32_t cyclesPerLoop = 5u;
+    /* The timeout in microseconds */
+    const uint32_t watchdogTimeoutUs = 10000u;
 
     if (NULL != context)
     {
-        /* Get the CSD HW block status */
+        /* Closes the IAIB switch if IDACs joined */
+        if ((CY_CSDIDAC_JOIN == context->cfgCopy.configA) || (CY_CSDIDAC_JOIN == context->cfgCopy.configB))
+        {
+            csdCfg.swRefgenSel |= CY_CSDIDAC_SW_REFGEN_SEL_IAIB_ON;
+        }
+
+        /* Gets the CSD HW block status. */
         mvKey = Cy_CSD_GetLockStatus(ptrCsdBaseAdd, ptrCsdCxt);
         if(CY_CSD_NONE_KEY == mvKey)
         {
-            initStatus = Cy_CSD_GetConversionStatus(ptrCsdBaseAdd, ptrCsdCxt);
-            if(CY_CSD_BUSY == initStatus)
+            Cy_CSD_WriteReg(ptrCsdBaseAdd, CY_CSD_REG_OFFSET_INTR_MASK, CY_CSDIDAC_CSD_INTR_MASK_CLEAR_MSK);
+            Cy_CSD_WriteReg(ptrCsdBaseAdd, CY_CSD_REG_OFFSET_SEQ_START, CY_CSDIDAC_FSM_ABORT);
+
+            /* Initializes the Watchdog Counter to prevent a hang. */
+            watchdogCounter = (watchdogTimeoutUs * (context->cfgCopy.cpuClk / CY_CSDIDAC_CONST_1000000)) / cyclesPerLoop;
+            do
             {
-                Cy_CSD_WriteReg(ptrCsdBaseAdd, CY_CSD_REG_OFFSET_INTR_MASK, CY_CSDIDAC_CSD_INTR_MASK_CLEAR_MSK);
-                Cy_CSD_WriteReg(ptrCsdBaseAdd, CY_CSD_REG_OFFSET_SEQ_START, CY_CSDIDAC_FSM_ABORT);
-
-                /* Initialize Watchdog Counter to prevent a hang */
-                watchdogCounter = (initWatchdogTimeS * context->cfgCopy.periClk) / intrInitLoopDuration;
-                while((CY_CSD_BUSY == initStatus) && (0u != watchdogCounter))
-                {
-                    initStatus = Cy_CSD_GetConversionStatus(ptrCsdBaseAdd, ptrCsdCxt);
-                    watchdogCounter--;
-                }
+                initStatus = Cy_CSD_GetConversionStatus(ptrCsdBaseAdd, ptrCsdCxt);
+                watchdogCounter--;
             }
-
-            if ((NULL != context->cfgCopy.ptrPinA) ||  (CY_CSDIDAC_ENABLE == context->cfgCopy.busOnlyA))
-            {
-                csdCfg.swBypSel |= CY_CSDIDAC_SW_BYPA_ENABLE;
-            }
-            if ((NULL != context->cfgCopy.ptrPinB) ||  (CY_CSDIDAC_ENABLE == context->cfgCopy.busOnlyB))
-            {
-                csdCfg.swBypSel |= CY_CSDIDAC_SW_BYPB_ENABLE;
-            }
-
-            /* Capture the CSD HW block for the IDAC functionality */
-            initStatus = Cy_CSD_Init(ptrCsdBaseAdd, &csdCfg, CY_CSD_IDAC_KEY, ptrCsdCxt);
-
+            while((CY_CSD_BUSY == initStatus) && (0u != watchdogCounter));
+            
             if (CY_CSD_SUCCESS == initStatus)
             {
-                result = CY_CSDIDAC_SUCCESS;
-            }
-            else
-            {
-                result = CY_CSDIDAC_HW_BUSY;
+                /* Captures the CSD HW block for the IDAC functionality. */
+                initStatus = Cy_CSD_Init(ptrCsdBaseAdd, &csdCfg, CY_CSD_IDAC_KEY, ptrCsdCxt);
+
+                if(CY_CSD_SUCCESS == initStatus)
+                {
+                    result = CY_CSDIDAC_SUCCESS;
+                }
             }
         }
         else
         {
             result = CY_CSDIDAC_HW_LOCKED;
         }
+    }
+    else
+    {
+        result = CY_CSDIDAC_BAD_PARAM;
     }
     return (result);
 }
@@ -605,38 +634,39 @@ cy_en_csdidac_status_t Cy_CSDIDAC_Restore(cy_stc_csdidac_context_t * context)
 * Enables an IDAC output with a specified current.
 *
 * This function performs the following:
-* * Verifies input parameters.
-* * Identifies an LSB and an IDAC code required to generate the specified 
+* * Verifies the input parameters.
+* * Identifies LSB and IDAC code required to generate the specified 
 *   output current and configures the CSD HW block accordingly.
-* * Configures and enables specified output of CSDIDAC and returns 
-*   status code.
+* * Configures and enables the CSDIDAC specified output and returns 
+*   the status code.
 *
 * \param ch
-* The CSDIDAC supports total of two output (A and B), this parameter 
-* specifies output to be enabled.
+* The CSDIDAC supports two outputs (A and B), this parameter 
+* specifies the output to be enabled.
 *
 * \param current
 * A current value for an IDAC output in nA with a sign. If the parameter is
-* positive, then a sourcing current will be generated. If the parameter is
-* negative, then the sinking current will be generated. The middleware will
-* identify LSB and code values required to achieve the specified output current.
-* The middleware will choose the minimum possible LSB to generate the current
-* to minimize a quantization error. The user should note the quantization
-* error in the output current based on LSB size (LSB should be 37.5/
+* positive, a sourcing current is generated. If the parameter is
+* negative, the sinking current is generated. The middleware 
+* identifies LSB and code values required to achieve the specified output 
+* current. The middleware chooses the minimum possible LSB to generate the 
+* current to minimize a quantization error. NOTE! the quantization
+* error in the output current based on the LSB size (37.5/
 * 75/300/600/2400/4800 nA). For instance, if this function
-* is called to set 123456 nA, the actual output current will be rounded
-* to nearest value of multiple to 2400 nA, i.e 122400 nA. An absolute 
-* value of this parameter should be in the range from 0x00u 
+* is called to set 123456 nA, the actual output current is rounded
+* to the nearest value of multiple to 2400 nA, i.e 122400 nA. The absolute 
+* value of this parameter is in the range from 0x00u 
 * to \ref CY_CSDIDAC_MAX_CURRENT_NA.
 *
 * \param context
-* The pointer to the CSDIDAC middleware context structure \ref cy_stc_csdidac_context_t.
+* The pointer to the CSDIDAC middleware context 
+* structure \ref cy_stc_csdidac_context_t.
 *
 * \return
 * The function returns the status of its operation.
-* * CY_CSDIDAC_SUCCESS   - The operation is performed successfully.
-* * CY_CSDIDAC_BAD_PARAM - A context pointer is equal to NULL.
-*                          The operation was not performed.
+* * CY_CSDIDAC_SUCCESS    - The operation is performed successfully.
+* * CY_CSDIDAC_BAD_PARAM  - The input pointer is NULL or an invalid parameter 
+*                           is passed.
 *
 *******************************************************************************/
 cy_en_csdidac_status_t Cy_CSDIDAC_OutputEnable(
@@ -644,66 +674,65 @@ cy_en_csdidac_status_t Cy_CSDIDAC_OutputEnable(
                 int32_t current,
                 cy_stc_csdidac_context_t * context)
 {
-    cy_en_csdidac_status_t retVal = CY_CSDIDAC_SUCCESS;
+    cy_en_csdidac_status_t retVal = CY_CSDIDAC_BAD_PARAM;
     cy_en_csdidac_polarity_t polarity= CY_CSDIDAC_SOURCE;
-    cy_en_csdidac_lsb_t lsb;
-    uint32_t tmpLsb;
+    cy_en_csdidac_lsb_t lsbIndex;
     uint32_t absCurrent = (0 > current) ? (uint32_t)(-current) : (uint32_t)current;
     uint32_t code;
 
     if((NULL != context) && (CY_CSDIDAC_MAX_CURRENT_NA >= absCurrent))
     {
-        /* Choose a desired current polarity */
-        if (0 > current)
+        if(true == Cy_CSDIDAC_IsIdacChoiceValid(ch, context->cfgCopy.configA, context->cfgCopy.configB))
         {
-            polarity = CY_CSDIDAC_SINK;
-        }
-        /* Choose IDAC LSB and calculate IDAC code with rounding */
-        tmpLsb = absCurrent / CY_CSDIDAC_MAX_CODE;
-        if (tmpLsb > CY_CSDIDAC_LSB_2400)
-        {
-            lsb = CY_CSDIDAC_LSB_4800_IDX;
-            code = (absCurrent + (CY_CSDIDAC_LSB_4800 >> 1u)) / CY_CSDIDAC_LSB_4800;
-        }
-        else if (tmpLsb > CY_CSDIDAC_LSB_600)
-        {
-            lsb = CY_CSDIDAC_LSB_2400_IDX;
-            code = (absCurrent + (CY_CSDIDAC_LSB_2400 >> 1u)) / CY_CSDIDAC_LSB_2400;
-        }
-        else if (tmpLsb > CY_CSDIDAC_LSB_300)
-        {
-            lsb = CY_CSDIDAC_LSB_600_IDX;
-            code = (absCurrent + (CY_CSDIDAC_LSB_600 >> 1u)) / CY_CSDIDAC_LSB_600;
-        }
-        else if (tmpLsb > CY_CSDIDAC_LSB_75)
-        {
-            lsb = CY_CSDIDAC_LSB_300_IDX;
-            code = (absCurrent + (CY_CSDIDAC_LSB_300 >> 1u)) / CY_CSDIDAC_LSB_300;
-        }
-        else if((tmpLsb * CY_CSDIDAC_CONST_10) > CY_CSDIDAC_LSB_37)
-        {
-            lsb = CY_CSDIDAC_LSB_75_IDX;
-            code = (absCurrent + (CY_CSDIDAC_LSB_75 >> 1u)) / CY_CSDIDAC_LSB_75;
-        }
-        else
-        {
-            lsb = CY_CSDIDAC_LSB_37_IDX;
-            code = ((absCurrent * CY_CSDIDAC_CONST_10) + (CY_CSDIDAC_LSB_37 >> 1u)) / CY_CSDIDAC_LSB_37;
-        }
-        if (code > CY_CSDIDAC_MAX_CODE)
-        {
-            code = CY_CSDIDAC_MAX_CODE;
-        }
+            /* Chooses the desired current polarity */
+            if (0 > current)
+            {
+                polarity = CY_CSDIDAC_SINK;
+            }
+            /* Converts absCurrent to pA */
+            absCurrent *= CY_CSDIDAC_CONST_1000;
+            /* Chooses IDAC LSB and calculates the IDAC code */
+            if (absCurrent < CY_CSDIDAC_LSB_37_MAX_CURRENT)
+            {
+                lsbIndex = CY_CSDIDAC_LSB_37_IDX;
+                code = absCurrent / CY_CSDIDAC_LSB_37;
+            }
+            else if (absCurrent < CY_CSDIDAC_LSB_75_MAX_CURRENT)
+            {
+                lsbIndex = CY_CSDIDAC_LSB_75_IDX;
+                code = absCurrent / CY_CSDIDAC_LSB_75;
+            }
+            else if (absCurrent < CY_CSDIDAC_LSB_300_MAX_CURRENT)
+            {
+                lsbIndex = CY_CSDIDAC_LSB_300_IDX;
+                code = absCurrent / CY_CSDIDAC_LSB_300;
+            }
+            else if (absCurrent < CY_CSDIDAC_LSB_600_MAX_CURRENT)
+            {
+                lsbIndex = CY_CSDIDAC_LSB_600_IDX;
+                code = absCurrent / CY_CSDIDAC_LSB_600;
+            }
+            else if(absCurrent < CY_CSDIDAC_LSB_2400_MAX_CURRENT)
+            {
+                lsbIndex = CY_CSDIDAC_LSB_2400_IDX;
+                code = absCurrent / CY_CSDIDAC_LSB_2400;
+            }
+            else
+            {
+                lsbIndex = CY_CSDIDAC_LSB_4800_IDX;
+                code = absCurrent / CY_CSDIDAC_LSB_4800;
+            }
+            if (code > CY_CSDIDAC_MAX_CODE)
+            {
+                code = CY_CSDIDAC_MAX_CODE;
+            }
 
-        /* Set desired IDAC(s) polarity, LSB and code in the CSD block and connect output(s) */
-        retVal = Cy_CSDIDAC_OutputEnableExt(ch, polarity, lsb, code, context);
-    }
-    else
-    {
-        retVal = CY_CSDIDAC_BAD_PARAM;
+            /* Sets the desired IDAC(s) polarity, LSB and code in the CSD block and connects output(s). */
+            retVal = Cy_CSDIDAC_OutputEnableExt(ch, polarity, lsbIndex, code, context);
+        }
     }
 
-    return(retVal);
+    return (retVal);
 }
 
 
@@ -711,15 +740,16 @@ cy_en_csdidac_status_t Cy_CSDIDAC_OutputEnable(
 * Function Name: Cy_CSDIDAC_OutputEnableExt
 ****************************************************************************//**
 *
-* Enables an IDAC output with specified polarity, LSB, and IDAC code.
+* Enables an IDAC output with the specified polarity, LSB, and IDAC code.
 *
 * This function performs the following:
-* * Verifies input parameters.
-* * Configures and enables specified output of CSDIDAC and returns status code.
+* * Verifies the input parameters.
+* * Configures and enables the specified output of CSDIDAC and returns the 
+*   status code.
 *
 * \param outputCh
-* CSDIDAC supports total of two output, this parameter specifies output
-* that needs to be enabled.
+* CSDIDAC supports two outputs, this parameter specifies the output to 
+* be enabled.
 *
 * \param polarity
 * The polarity to be set for the specified IDAC.
@@ -728,18 +758,18 @@ cy_en_csdidac_status_t Cy_CSDIDAC_OutputEnable(
 * The LSB to be set for the specified IDAC.
 *
 * \param idacCode
-* Code value for the specified IDAC. Should be in the range from 0 u
+* The code value for the specified IDAC in the range from 0 u
 * to \ref CY_CSDIDAC_MAX_CODE.
 *
 * \param context
-* The pointer to the CSDIDAC middleware context structure \ref cy_stc_csdidac_context_t.
+* The pointer to the CSDIDAC middleware context 
+* structure \ref cy_stc_csdidac_context_t.
 *
 * \return
 * The function returns the status of its operation.
-* * CY_CSDIDAC_SUCCESS   - The operation performed successfully.
-* * CY_CSDIDAC_BAD_PARAM - A context pointer is equal to NULL or other
-*                          input parameter is not valid.
-*                          The operation was not performed.
+* * CY_CSDIDAC_SUCCESS    - The operation is performed successfully.
+* * CY_CSDIDAC_BAD_PARAM  - The input pointer is NULL or an invalid parameter 
+*                           is passed.
 *
 *******************************************************************************/
 cy_en_csdidac_status_t Cy_CSDIDAC_OutputEnableExt(
@@ -750,79 +780,132 @@ cy_en_csdidac_status_t Cy_CSDIDAC_OutputEnableExt(
                 cy_stc_csdidac_context_t * context)
 {
     CSD_Type * ptrCsdBaseAdd = context->cfgCopy.base;
-    uint32_t idacRegOffset;
     uint32_t idacRegValue;
-    cy_en_csdidac_status_t retVal = CY_CSDIDAC_SUCCESS;
+    uint32_t  interruptState;
+    cy_en_csdidac_status_t retVal = CY_CSDIDAC_BAD_PARAM;
 
     if((NULL != context) && (CY_CSDIDAC_MAX_CODE >= idacCode))
     {
-        if ((CY_CSDIDAC_A == outputCh) && (NULL == context->cfgCopy.ptrPinA) &&
-                              (CY_CSDIDAC_ENABLE != context->cfgCopy.busOnlyA))
-        {
-            retVal = CY_CSDIDAC_BAD_PARAM;
-        }
-        if ((CY_CSDIDAC_B == outputCh) && (NULL == context->cfgCopy.ptrPinB) &&
-                              (CY_CSDIDAC_ENABLE != context->cfgCopy.busOnlyB))
-        {
-            retVal = CY_CSDIDAC_BAD_PARAM;
-        }
-
-        if (CY_CSDIDAC_BAD_PARAM != retVal)
-        {
-            if (CY_CSDIDAC_A == outputCh)
-            {
-                /* Set IDAC A polarity, LSB and code in the context structure */
-                context->polarityA = polarity;
-                context->lsbA = lsbIndex;
-                context->codeA = (uint8_t)idacCode;
-                idacRegOffset = CY_CSD_REG_OFFSET_IDACA;
-                context->channelStateA = CY_CSDIDAC_ENABLE;
-            }
-            else
-            {
-                /* Set IDAC B polarity, LSB and code in the context structure */
-                context->polarityB = polarity;
-                context->lsbB = lsbIndex;
-                context->codeB = (uint8_t)idacCode;
-                idacRegOffset = CY_CSD_REG_OFFSET_IDACB;
-                context->channelStateB = CY_CSDIDAC_ENABLE;
-            }
+        if((true == Cy_CSDIDAC_IsIdacChoiceValid(outputCh, context->cfgCopy.configA, context->cfgCopy.configB)) &&
+           (true == Cy_CSDIDAC_IsIdacPolarityValid(polarity)) &&
+           (true == Cy_CSDIDAC_IsIdacLsbValid(lsbIndex)))
+         {
             idacRegValue = idacCode | (((uint32_t)polarity) << CY_CSDIDAC_POLARITY_POS);
-            /* Set IDAC LSB. LSB value is equal lsbIndex divided by 2 */
+            /* Sets IDAC LSB. The LSB value equals lsbIndex divided by 2 */
             idacRegValue |= ((((uint32_t)lsbIndex) >> 1uL) << CY_CSDIDAC_LSB_POS);
-            /* Set IDAC leg1 enabling bit */
+            /* Sets the IDAC leg1 enabling bit */
             idacRegValue |= ((uint32_t)CY_CSDIDAC_LEG1_EN_MASK);
-            /* Set IDAC leg2 enabling bit if the lsbIndex is even */
+            /* Sets the IDAC leg2 enabling bit if the lsbIndex is even. */
             if (0u != (lsbIndex % CY_CSDIDAC_CONST_2))
             {
                 idacRegValue |= ((uint32_t)CY_CSDIDAC_LEG2_EN_MASK);
             }
 
-            /* Write desired IDAC polarity, LSB and code in the CSD block */
-            Cy_CSD_WriteReg(ptrCsdBaseAdd, idacRegOffset, idacRegValue);
-            /* Connect pin if it is configured */
-            if ((CY_CSDIDAC_A == outputCh) && (CY_CSDIDAC_ENABLE != context->cfgCopy.busOnlyA))
+            interruptState = Cy_SysLib_EnterCriticalSection();
+            if (((CY_CSDIDAC_A == outputCh) || (CY_CSDIDAC_AB == outputCh)) &&
+                (CY_CSDIDAC_DISABLED != context->cfgCopy.configA))
             {
-                /* Connect AMuxBusA to the selected port */
-                Cy_GPIO_SetHSIOM(context->cfgCopy.ptrPinA->ioPcPtr,
-                                 (uint32_t)context->cfgCopy.ptrPinA->pin,
-                                 HSIOM_SEL_AMUXA);
+                /* Sets the IDAC A polarity, LSB and code in the context structure. */
+                context->polarityA = polarity;
+                context->lsbA = lsbIndex;
+                context->codeA = (uint8_t)idacCode;
+                context->channelStateA = CY_CSDIDAC_ENABLE;
+                /* Connects the IDAC A output. */
+                Cy_CSDIDAC_ConnectChannelA(context);
+                /* A connected IDAC B output must be available if the IDAC A output is joined to it. */
+                if (CY_CSDIDAC_JOIN == context->cfgCopy.configA)
+                {
+                    Cy_CSDIDAC_ConnectChannelB(context);
+                }
+                Cy_CSD_WriteReg(ptrCsdBaseAdd, CY_CSD_REG_OFFSET_IDACA, idacRegValue);
+
+                retVal = CY_CSDIDAC_SUCCESS;
             }
-            if ((CY_CSDIDAC_B == outputCh) && (CY_CSDIDAC_ENABLE != context->cfgCopy.busOnlyB))
+
+            if (((CY_CSDIDAC_B == outputCh) || (CY_CSDIDAC_AB == outputCh)) &&
+                (CY_CSDIDAC_DISABLED != context->cfgCopy.configB))
             {
-                /* Connect AMuxBusA to the selected port */
-                Cy_GPIO_SetHSIOM(context->cfgCopy.ptrPinB->ioPcPtr,
-                                 (uint32_t)context->cfgCopy.ptrPinB->pin,
-                                 HSIOM_SEL_AMUXB);
+                /* Sets the IDAC B polarity, LSB and code in the context structure. */
+                context->polarityB = polarity;
+                context->lsbB = lsbIndex;
+                context->codeB = (uint8_t)idacCode;
+                context->channelStateB = CY_CSDIDAC_ENABLE;
+                /* Connects the IDAC B output. */
+                Cy_CSDIDAC_ConnectChannelB(context);
+                /* A connected IDAC A output must be available if the IDAC B output is joined to it */
+                if (CY_CSDIDAC_JOIN == context->cfgCopy.configB)
+                {
+                    Cy_CSDIDAC_ConnectChannelA(context);
+                }
+                Cy_CSD_WriteReg(ptrCsdBaseAdd, CY_CSD_REG_OFFSET_IDACB, idacRegValue);
+
+                retVal = CY_CSDIDAC_SUCCESS;
             }
+            Cy_SysLib_ExitCriticalSection(interruptState);
         }
     }
-    else
-    {
-        retVal = CY_CSDIDAC_BAD_PARAM;
-    }
 
-    return(retVal);
+    return (retVal);
+}
+
+
+/*******************************************************************************
+* Function Name: Cy_CSDIDAC_ConnectChannelA
+****************************************************************************//**
+*
+* Connects an IDAC A output as specified by the configuration.
+*
+* \param context
+* The pointer to the CSDIDAC middleware context
+* structure \ref cy_stc_csdidac_context_t.
+*
+*******************************************************************************/
+static void Cy_CSDIDAC_ConnectChannelA(
+                cy_stc_csdidac_context_t * context)
+{
+    /* Closes the bypass A switch to feed output current to AMuxBusA. */
+    if ((CY_CSDIDAC_GPIO == context->cfgCopy.configA) ||  (CY_CSDIDAC_AMUX == context->cfgCopy.configA))
+    {
+        Cy_CSD_SetBits(context->cfgCopy.base, CY_CSD_REG_OFFSET_SW_BYP_SEL, CY_CSDIDAC_SW_BYPA_ENABLE);
+    }
+    /* Configures port pin, if it is enabled. */
+    if ((CY_CSDIDAC_GPIO == context->cfgCopy.configA) && (NULL != context->cfgCopy.ptrPinA))
+    {
+        /* Update port configuration register (drive mode) to High-Z Analog */
+        Cy_GPIO_SetDrivemode(context->cfgCopy.ptrPinA->ioPcPtr, (uint32_t)context->cfgCopy.ptrPinA->pin, CY_GPIO_DM_ANALOG);
+        /* Connect the selected port to AMuxBusA */
+        Cy_GPIO_SetHSIOM(context->cfgCopy.ptrPinA->ioPcPtr, (uint32_t)context->cfgCopy.ptrPinA->pin, HSIOM_SEL_AMUXA);
+    }
+}
+
+
+/*******************************************************************************
+* Function Name: Cy_CSDIDAC_ConnectChannelB
+****************************************************************************//**
+*
+* Connects an IDAC B output as specified by the configuration.
+*
+* \param context
+* The pointer to the CSDIDAC middleware context
+* structure \ref cy_stc_csdidac_context_t.
+*
+*******************************************************************************/
+static void Cy_CSDIDAC_ConnectChannelB(
+                cy_stc_csdidac_context_t * context)
+{
+    /* Closes the bypass B switch to feed an output current to AMuxBusB. */
+    if ((CY_CSDIDAC_GPIO == context->cfgCopy.configB) ||  (CY_CSDIDAC_AMUX == context->cfgCopy.configB))
+    {
+        Cy_CSD_SetBits(context->cfgCopy.base, CY_CSD_REG_OFFSET_SW_BYP_SEL, CY_CSDIDAC_SW_BYPB_ENABLE);
+    }
+    /* Configures port pin, if it is enabled. */
+    if (CY_CSDIDAC_GPIO == context->cfgCopy.configB)
+    {
+        /* Update port configuration register (drive mode) to High-Z Analog */
+        Cy_GPIO_SetDrivemode(context->cfgCopy.ptrPinB->ioPcPtr, (uint32_t)context->cfgCopy.ptrPinB->pin, CY_GPIO_DM_ANALOG);
+        /* Connect the selected port to AMuxBusB */
+        Cy_GPIO_SetHSIOM(context->cfgCopy.ptrPinB->ioPcPtr, (uint32_t)context->cfgCopy.ptrPinB->pin, HSIOM_SEL_AMUXB);
+    }
 }
 
 
@@ -833,25 +916,25 @@ cy_en_csdidac_status_t Cy_CSDIDAC_OutputEnableExt(
 * Disconnects the output channel A pin, if it is configured.
 *
 * \param context
-* The pointer to the CSDIDAC middleware context structure \ref cy_stc_csdidac_context_t.
+* The pointer to the CSDIDAC middleware context 
+* structure \ref cy_stc_csdidac_context_t.
 *
 *******************************************************************************/
 static void Cy_CSDIDAC_DisconnectChannelA(cy_stc_csdidac_context_t * context)
 {
-    CSD_Type * ptrCsdBaseAdd = context->cfgCopy.base;
-    uint32_t idacRegOffset = CY_CSD_REG_OFFSET_IDACA;
-
-    /* Disable desired IDAC */
-    Cy_CSD_WriteReg(ptrCsdBaseAdd, idacRegOffset, 0uL);
-    /* Disconnect AMuxBusA from the selected pin, if configured */
-    if ((CY_CSDIDAC_ENABLE != context->cfgCopy.busOnlyA) && (NULL != context->cfgCopy.ptrPinA))
+    /* Disables the desired IDAC. */
+    context->channelStateA = CY_CSDIDAC_DISABLE;
+    Cy_CSD_WriteReg(context->cfgCopy.base, CY_CSD_REG_OFFSET_IDACA, 0uL);
+    /* Opens the bypass A switch to disconnect an output current from AMuxBusA. */
+    if ((CY_CSDIDAC_GPIO == context->cfgCopy.configA) ||  (CY_CSDIDAC_AMUX == context->cfgCopy.configA))
+    {
+        Cy_CSD_ClrBits(context->cfgCopy.base, CY_CSD_REG_OFFSET_SW_BYP_SEL, CY_CSDIDAC_SW_BYPA_ENABLE);
+    }
+    /* Disconnects AMuxBusA from the selected pin, if it is configured. */
+    if ((CY_CSDIDAC_GPIO == context->cfgCopy.configA) && (NULL != context->cfgCopy.ptrPinA))
     {
         Cy_GPIO_SetHSIOM(context->cfgCopy.ptrPinA->ioPcPtr, (uint32_t)context->cfgCopy.ptrPinA->pin, HSIOM_SEL_GPIO);
     }
-    /* Set IDAC state in the context structure to disabled */
-    context->channelStateA = CY_CSDIDAC_DISABLE;
-
-
 }
 
 
@@ -862,23 +945,25 @@ static void Cy_CSDIDAC_DisconnectChannelA(cy_stc_csdidac_context_t * context)
 * Disconnects the output channel B pin, if it is configured.
 *
 * \param context
-* The pointer to the CSDIDAC middleware context structure \ref cy_stc_csdidac_context_t.
+* The pointer to the CSDIDAC middleware context 
+* structure \ref cy_stc_csdidac_context_t.
 *
 *******************************************************************************/
 static void Cy_CSDIDAC_DisconnectChannelB(cy_stc_csdidac_context_t * context)
 {
-    CSD_Type * ptrCsdBaseAdd = context->cfgCopy.base;
-    uint32_t idacRegOffset = CY_CSD_REG_OFFSET_IDACB;
-
-    /* Disable desired IDAC */
-    Cy_CSD_WriteReg(ptrCsdBaseAdd, idacRegOffset, 0uL);
-    /* Disconnect AMuxBusB from the selected pin, if configured */
-    if ((CY_CSDIDAC_ENABLE != context->cfgCopy.busOnlyB) && (NULL != context->cfgCopy.ptrPinB))
+    /* Disables the desired IDAC. */
+    context->channelStateB = CY_CSDIDAC_DISABLE;
+    Cy_CSD_WriteReg(context->cfgCopy.base, CY_CSD_REG_OFFSET_IDACB, 0uL);
+    /* Opens the bypass B switch to disconnect an output current from AMuxBusB. */
+    if ((CY_CSDIDAC_GPIO == context->cfgCopy.configB) ||  (CY_CSDIDAC_AMUX == context->cfgCopy.configB))
+    {
+        Cy_CSD_ClrBits(context->cfgCopy.base, CY_CSD_REG_OFFSET_SW_BYP_SEL, CY_CSDIDAC_SW_BYPB_ENABLE);
+    }
+    /* Disconnects AMuxBusB from the selected pin, if it is configured. */
+    if ((CY_CSDIDAC_GPIO == context->cfgCopy.configB) && (NULL != context->cfgCopy.ptrPinB))
     {
         Cy_GPIO_SetHSIOM(context->cfgCopy.ptrPinB->ioPcPtr, (uint32_t)context->cfgCopy.ptrPinB->pin, HSIOM_SEL_GPIO);
     }
-    /* Set IDAC state in the context structure to disabled */
-    context->channelStateB = CY_CSDIDAC_DISABLE;
 }
 
 
@@ -889,46 +974,47 @@ static void Cy_CSDIDAC_DisconnectChannelB(cy_stc_csdidac_context_t * context)
 * Disables a specified IDAC output.
 *
 * The function performs the following:
-* * Verifies input parameters.
-* * Disables specified output of CSDIDAC and returns the status code.
+* * Verifies the input parameters.
+* * Disables the specified output of CSDIDAC and returns the status code.
 *
 * \param ch
 * The channel to disconnect.
 *
 * \param context
-* The pointer to the CSDIDAC middleware context structure \ref cy_stc_csdidac_context_t.
+* The pointer to the CSDIDAC middleware context 
+* structure \ref cy_stc_csdidac_context_t.
 *
 * \return
 * The function returns the status of its operation.
-* * CY_CSDIDAC_SUCCESS   - The operation performed successfully.
-* * CY_CSDIDAC_BAD_PARAM - A context pointer is equal to NULL.
-*                          The operation was not performed.
+* * CY_CSDIDAC_SUCCESS    - The operation is performed successfully.
+* * CY_CSDIDAC_BAD_PARAM  - The input pointer is NULL or an invalid parameter 
+*                           is passed.
 *
 *******************************************************************************/
 cy_en_csdidac_status_t Cy_CSDIDAC_OutputDisable(
                 cy_en_csdidac_choice_t ch,
                 cy_stc_csdidac_context_t * context)
 {
-    cy_en_csdidac_status_t retVal = CY_CSDIDAC_SUCCESS;
+    cy_en_csdidac_status_t retVal = CY_CSDIDAC_BAD_PARAM;
 
     if(NULL != context)
     {
-        if (CY_CSDIDAC_A == ch)
+        if ((CY_CSDIDAC_A == ch) || (CY_CSDIDAC_AB == ch))
         {
             Cy_CSDIDAC_DisconnectChannelA(context);
+            retVal = CY_CSDIDAC_SUCCESS;
         }
-        if (CY_CSDIDAC_B == ch)
+        if ((CY_CSDIDAC_B == ch) || (CY_CSDIDAC_AB == ch))
         {
             Cy_CSDIDAC_DisconnectChannelB(context);
+            retVal = CY_CSDIDAC_SUCCESS;
         }
     }
-    else
-    {
-        retVal = CY_CSDIDAC_BAD_PARAM;
-    }
 
-    return(retVal);
+    return (retVal);
 }
+
+#endif /* CY_IP_MXCSDV2 */
 
 
 /* [] END OF FILE */
