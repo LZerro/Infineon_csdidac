@@ -1,7 +1,7 @@
 var NAVTREE =
 [
-  [ "Cypress CSDIDAC Middleware Library 2.0", "index.html", [
-    [ "Cypress CSDIDAC Middleware Library", "index.html", [
+  [ "CSDIDAC Middleware Library 2.10", "index.html", [
+    [ "CSDIDAC Middleware Library", "index.html", [
       [ "General Description", "index.html#section_csdidac_general", null ],
       [ "Quick Start Guide", "index.html#section_csdidac_quick_start", null ],
       [ "Configuration Considerations", "index.html#section_csdidac_configuration", [

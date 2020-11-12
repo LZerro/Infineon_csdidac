@@ -1,13 +1,13 @@
 /***************************************************************************//**
 * \file cy_csdidac.c
-* \version 2.0
+* \version 2.10
 *
 * \brief
 * This file provides the CSD HW block IDAC functionality implementation.
 *
 ********************************************************************************
 * \copyright
-* Copyright 2019, Cypress Semiconductor Corporation.  All rights reserved.
+* Copyright 2019-2020, Cypress Semiconductor Corporation.  All rights reserved.
 * You may use this file only in accordance with the license, terms, conditions,
 * disclaimers, and limitations in the end user license agreement accompanying
 * the software package with which this file was provided.
@@ -21,7 +21,7 @@
 #include "cy_gpio.h"
 #include "cy_csd.h"
 
-#if defined(CY_IP_MXCSDV2)
+#if (defined(CY_IP_MXCSDV2) || defined(CY_IP_M0S8CSDV2))
 
 
 /*******************************************************************************
@@ -71,7 +71,7 @@ static void Cy_CSDIDAC_DisconnectChannelB(cy_stc_csdidac_context_t * context);
 #define CY_CSDIDAC_LEG2_EN_MASK                     (1uL << CY_CSDIDAC_LEG2_EN_POS)
 #define CY_CSDIDAC_RANGE_MASK                       (CY_CSDIDAC_LSB_MASK | CY_CSDIDAC_LEG1_EN_MASK | CY_CSDIDAC_LEG2_EN_MASK)
 
-/* 
+/*
 * All the defines below correspond to IDAC LSB in pA
 */
 #define CY_CSDIDAC_LSB_37                           (  37500u)
@@ -159,54 +159,54 @@ static void Cy_CSDIDAC_DisconnectChannelB(cy_stc_csdidac_context_t * context);
     .idacB          = 0x00000000uL,\
     }
 
-    
+
 /*******************************************************************************
 * Function Name: Cy_CSDIDAC_Init
 ****************************************************************************//**
 *
-* Captures the CSD HW block and configures it to the default state. 
-* This function is called by the application program prior to calling 
+* Captures the CSD HW block and configures it to the default state.
+* This function is called by the application program prior to calling
 * any other middleware function.
 *
-* Initializes the CSDIDAC middleware. Acquires, locks, and initializes 
+* Initializes the CSDIDAC middleware. Acquires, locks, and initializes
 * the CSD HW block by using the low-level CSD driver.
 * The function performs the following tasks:
 * * Verifies the input parameters. The CY_CSDIDAC_BAD_PARAM is returned if
 *   verification fails.
 * * Acquires and locks the CSD HW block for use of the CSDIDAC, if the CSD HW
 *   block is in a free state.
-* * If the CSD HW block is acquired, it is initialized with 
-*   the CSDIDAC middleware by the default configuration. 
-*   The output pins are not connected to the CSD HW block. 
+* * If the CSD HW block is acquired, it is initialized with
+*   the CSDIDAC middleware by the default configuration.
+*   The output pins are not connected to the CSD HW block.
 *   The outputs are disabled and CY_CSDIDAC_SUCCESS is returned.
-* 
-* To connect an output pin and enable an output current, the 
-* Cy_CSDIDAC_OutputEnable() or Cy_CSDIDAC_OutputEnableExt() functions 
+*
+* To connect an output pin and enable an output current, the
+* Cy_CSDIDAC_OutputEnable() or Cy_CSDIDAC_OutputEnableExt() functions
 * are used.
 * If there is no CSD HW block, the CY_CSDIDAC_HW_BUSY status is returned,
 * and the CSDIDAC middleware waits for the CSD HW block to be in the idle
 * state to initialize.
 *
 * \param config
-* The pointer to the configuration structure \ref cy_stc_csdidac_config_t that 
-* contains the CSDIDAC middleware initial configuration data generated 
+* The pointer to the configuration structure \ref cy_stc_csdidac_config_t that
+* contains the CSDIDAC middleware initial configuration data generated
 * by the CSD personality of the ModusToolbox Device Configurator tool.
 *
 * \param context
 * The pointer to the CSDIDAC context structure \ref cy_stc_csdidac_context_t
-* passed by the user. After the initialization, this structure contains 
-* both CSDIDAC configuration and internal data. It is used during the whole 
+* passed by the user. After the initialization, this structure contains
+* both CSDIDAC configuration and internal data. It is used during the whole
 * CSDIDAC operation.
 *
 * \return
 * The function returns the status of its operation.
 * * CY_CSDIDAC_SUCCESS           - The operation is performed successfully.
-* * CY_CSDIDAC_BAD_PARAM         - The input pointer is NULL or an invalid 
+* * CY_CSDIDAC_BAD_PARAM         - The input pointer is NULL or an invalid
 *                                  parameter is passed.
 * * CY_CSDIDAC_HW_LOCKED         - The CSD HW block is already in use by other
 *                                  middleware.
 * * CY_CSDIDAC_HW_FAILURE        - The CSD HW block failure.
-* * CY_CSDIDAC_BAD_CONFIGURATION - The CSDIDAC configuration structure 
+* * CY_CSDIDAC_BAD_CONFIGURATION - The CSDIDAC configuration structure
 *                                  initialization issue.
 *
 *******************************************************************************/
@@ -250,16 +250,16 @@ cy_en_csdidac_status_t Cy_CSDIDAC_Init(
 * Stops the middleware operation and releases the CSD HW block.
 *
 * If any output channel is enabled, it will be disabled and disconnected.
-* 
-* After the CSDIDAC middleware is stopped, the CSD HW block may be 
-* reconfigured by the application program or other middleware for any 
-* other usage. 
-* 
+*
+* After the CSDIDAC middleware is stopped, the CSD HW block may be
+* reconfigured by the application program or other middleware for any
+* other usage.
+*
 * When the middleware operation is stopped by the Cy_CSDIDAC_DeInit()
 * function, a subsequent call of the Cy_CSDIDAC_Init() function repeats the
-* initialization process. However, to implement Time-multiplexed mode 
-* (sharing the CSD HW Block between multiple middleware), 
-* the Cy_CSDIDAC_Save() and Cy_CSDIDAC_Restore() functions are used 
+* initialization process. However, to implement Time-multiplexed mode
+* (sharing the CSD HW Block between multiple middleware),
+* the Cy_CSDIDAC_Save() and Cy_CSDIDAC_Restore() functions are used
 * instead of the Cy_CSDIDAC_DeInit() and Cy_CSDIDAC_Init() functions.
 *
 * \param context
@@ -268,7 +268,7 @@ cy_en_csdidac_status_t Cy_CSDIDAC_Init(
 * \return
 * The function returns the status of its operation.
 * * CY_CSDIDAC_SUCCESS           - The operation is performed successfully.
-* * CY_CSDIDAC_BAD_PARAM         - The input pointer is NULL or an invalid 
+* * CY_CSDIDAC_BAD_PARAM         - The input pointer is NULL or an invalid
 *                                  parameter is passed.
 * * CY_CSDIDAC_HW_LOCKED         - The CSD HW block is already in use by other
 *                                  middleware.
@@ -289,8 +289,8 @@ cy_en_csdidac_status_t Cy_CSDIDAC_DeInit(cy_stc_csdidac_context_t * context)
 *
 * This function sets the desired CSDIDAC middleware configuration.
 * The function performs the following:
-* * Verifies the input parameters 
-* * Verifies whether the CSD HW block is captured by the CSDIDAC middleware 
+* * Verifies the input parameters
+* * Verifies whether the CSD HW block is captured by the CSDIDAC middleware
 *   and that there are no active IDAC outputs.
 * * Initializes the CSD HW block registers with data passed through the
 *   config parameter of this function if the above verifications are
@@ -306,13 +306,13 @@ cy_en_csdidac_status_t Cy_CSDIDAC_DeInit(cy_stc_csdidac_context_t * context)
 * \return
 * The function returns the status of its operation.
 * * CY_CSDIDAC_SUCCESS           - The operation is performed successfully.
-* * CY_CSDIDAC_BAD_PARAM         - The input pointer is NULL or an invalid 
+* * CY_CSDIDAC_BAD_PARAM         - The input pointer is NULL or an invalid
 *                                  parameter is passed.
-* * CY_CSDIDAC_HW_BUSY           - Any IDAC output is enabled. The operation 
+* * CY_CSDIDAC_HW_BUSY           - Any IDAC output is enabled. The operation
 *                                  cannot be completed.
 * * CY_CSDIDAC_HW_LOCKED         - The CSD HW block is already in use by other
 *                                  middleware.
-* * CY_CSDIDAC_BAD_CONFIGURATION - The CSDIDAC configuration structure 
+* * CY_CSDIDAC_BAD_CONFIGURATION - The CSDIDAC configuration structure
 *                                  initialization issue.
 *
 *******************************************************************************/
@@ -322,7 +322,7 @@ cy_en_csdidac_status_t Cy_CSDIDAC_WriteConfig(
 {
     cy_en_csdidac_status_t result = CY_CSDIDAC_BAD_PARAM;
     uint32_t tmpRegValue = CY_CSDIDAC_SW_REFGEN_SEL_IBCB_ON;
-    
+
     if ((NULL != config) && (NULL != context))
     {
         if(true == Cy_CSDIDAC_IsIdacConfigValid(config))
@@ -372,8 +372,8 @@ cy_en_csdidac_status_t Cy_CSDIDAC_WriteConfig(
 * Provides a delay required for the CSD HW block to settle after a wakeup
 * from CPU / System Deep Sleep.
 *
-* This function provides a delay after exiting CPU / System Deep Sleep.  
-* After the CSD HW block has been powered off, an extra delay is required 
+* This function provides a delay after exiting CPU / System Deep Sleep.
+* After the CSD HW block has been powered off, an extra delay is required
 * to establish the CSD HW block correct operation.
 *
 * \param context
@@ -407,12 +407,12 @@ cy_en_csdidac_status_t Cy_CSDIDAC_Wakeup(const cy_stc_csdidac_context_t * contex
 *
 * This function handles CPU active to CPU / System Deep Sleep power mode transition
 * for the CSDIDAC middleware.
-* Calling this function directly from the application program is not 
-* recommended. Instead, Cy_SysPm_CpuEnterDeepSleep() is used for CPU active to 
+* Calling this function directly from the application program is not
+* recommended. Instead, Cy_SysPm_CpuEnterDeepSleep() is used for CPU active to
 * CPU / System Deep Sleep power mode transition of the device.
 * \note
-* After the CPU Deep Sleep transition, the device automatically goes 
-* to System Deep Sleep if all conditions are fulfilled: another core is 
+* After the CPU Deep Sleep transition, the device automatically goes
+* to System Deep Sleep if all conditions are fulfilled: another core is
 * in CPU Deep Sleep, all the peripherals are ready to System Deep Sleep, etc.
 * (see details in the device TRM).
 *
@@ -473,13 +473,13 @@ cy_en_syspm_status_t Cy_CSDIDAC_DeepSleepCallback(
 * This function, along with Cy_CSDIDAC_Restore(), is specifically designed
 * to support time multiplexing of the CSD HW block between multiple
 * middleware. When the CSD HW block is shared by more than one middleware,
-* this function can be used to save the current state of the CSDIDAC middleware 
+* this function can be used to save the current state of the CSDIDAC middleware
 * and the CSD HW block prior to releasing the CSD HW block for use by other
 * middleware.
-* 
+*
 * This function performs the following operations:
 * * Saves the current configuration of the CSD HW block and CSDIDAC middleware.
-* * Configures the output pins to the default state and disconnects them from 
+* * Configures the output pins to the default state and disconnects them from
 * the CSD HW block. Releases the CSD HW block.
 *
 * \param context
@@ -490,7 +490,7 @@ cy_en_syspm_status_t Cy_CSDIDAC_DeepSleepCallback(
 * * CY_CSDIDAC_SUCCESS      - The operation is performed successfully.
 * * CY_CSDIDAC_BAD_PARAM    - The input pointer is NULL or an invalid parameter
 *                             is passed. The operation is not completed.
-* * CY_CSDIDAC_HW_LOCKED    - The CSD HW block is already in use by other middleware. 
+* * CY_CSDIDAC_HW_LOCKED    - The CSD HW block is already in use by other middleware.
 *                             The CSDIDAC middleware cannot save the state
 *                             without the initialization or restore operation.
 * * CY_CSDIDAC_HW_FAILURE   - A CSD HW block failure.
@@ -511,7 +511,7 @@ cy_en_csdidac_status_t Cy_CSDIDAC_Save(cy_stc_csdidac_context_t * context)
 
             /* Releases the HW CSD block. */
             initStatus = Cy_CSD_DeInit(context->cfgCopy.base, CY_CSD_IDAC_KEY, context->cfgCopy.csdCxtPtr);
-            
+
             if (CY_CSD_SUCCESS == initStatus)
             {
                 result = CY_CSDIDAC_SUCCESS;
@@ -519,7 +519,7 @@ cy_en_csdidac_status_t Cy_CSDIDAC_Save(cy_stc_csdidac_context_t * context)
             else
             {
                 result = CY_CSDIDAC_HW_FAILURE;
-            }    
+            }
         }
         else
         {
@@ -538,27 +538,27 @@ cy_en_csdidac_status_t Cy_CSDIDAC_Save(cy_stc_csdidac_context_t * context)
 * Resumes the middleware operation if the Cy_CSDIDAC_Save() function was
 * called previously.
 *
-* This function, along with the Cy_CSDIDAC_Save() function, is specifically 
+* This function, along with the Cy_CSDIDAC_Save() function, is specifically
 * designed to support the CSD HW block time-multiplexing
 * among multiple middleware. When the CSD HW block is shared by more than one
-* middleware, this function can be used to restore the CSD HW block previous  
-* state and the CSDIDAC middleware saved using the Cy_CSDIDAC_Save() function. 
-* 
-* This function performs the Cy_CSDIDAC_Init() function, part tasks 
-* namely captures the CSD HW block. Use the Cy_CSDIDAC_Save() and 
-* Cy_CSDIDAC_Restore() functions to implement Time-multiplexed mode 
+* middleware, this function can be used to restore the CSD HW block previous
+* state and the CSDIDAC middleware saved using the Cy_CSDIDAC_Save() function.
+*
+* This function performs the Cy_CSDIDAC_Init() function, part tasks
+* namely captures the CSD HW block. Use the Cy_CSDIDAC_Save() and
+* Cy_CSDIDAC_Restore() functions to implement Time-multiplexed mode
 * instead of using the Cy_CSDIDAC_DeInit() and Cy_CSDIDAC_Init() functions.
 *
 * \param context
-* The pointer to the CSDIDAC middleware context 
+* The pointer to the CSDIDAC middleware context
 * structure \ref cy_stc_csdidac_context_t.
 *
 * \return
 * The function returns the status of its operation.
 * * CY_CSDIDAC_SUCCESS           - The operation is performed successfully.
-* * CY_CSDIDAC_BAD_PARAM         - The input pointer is NULL or an invalid 
+* * CY_CSDIDAC_BAD_PARAM         - The input pointer is NULL or an invalid
 *                                  parameter is passed.
-* * CY_CSDIDAC_HW_LOCKED         - The CSD HW block is already in use by 
+* * CY_CSDIDAC_HW_LOCKED         - The CSD HW block is already in use by
 *                                  another middleware.
 * * CY_CSDIDAC_HW_FAILURE        - The CSD HW block failure.
 *
@@ -602,7 +602,7 @@ cy_en_csdidac_status_t Cy_CSDIDAC_Restore(cy_stc_csdidac_context_t * context)
                 watchdogCounter--;
             }
             while((CY_CSD_BUSY == initStatus) && (0u != watchdogCounter));
-            
+
             if (CY_CSD_SUCCESS == initStatus)
             {
                 /* Captures the CSD HW block for the IDAC functionality. */
@@ -635,37 +635,37 @@ cy_en_csdidac_status_t Cy_CSDIDAC_Restore(cy_stc_csdidac_context_t * context)
 *
 * This function performs the following:
 * * Verifies the input parameters.
-* * Identifies LSB and IDAC code required to generate the specified 
+* * Identifies LSB and IDAC code required to generate the specified
 *   output current and configures the CSD HW block accordingly.
-* * Configures and enables the CSDIDAC specified output and returns 
+* * Configures and enables the CSDIDAC specified output and returns
 *   the status code.
 *
 * \param ch
-* The CSDIDAC supports two outputs (A and B), this parameter 
+* The CSDIDAC supports two outputs (A and B), this parameter
 * specifies the output to be enabled.
 *
 * \param current
 * A current value for an IDAC output in nA with a sign. If the parameter is
 * positive, a sourcing current is generated. If the parameter is
-* negative, the sinking current is generated. The middleware 
-* identifies LSB and code values required to achieve the specified output 
-* current. The middleware chooses the minimum possible LSB to generate the 
+* negative, the sinking current is generated. The middleware
+* identifies LSB and code values required to achieve the specified output
+* current. The middleware chooses the minimum possible LSB to generate the
 * current to minimize a quantization error. NOTE! the quantization
 * error in the output current based on the LSB size (37.5/
 * 75/300/600/2400/4800 nA). For instance, if this function
 * is called to set 123456 nA, the actual output current is rounded
-* to the nearest value of multiple to 2400 nA, i.e 122400 nA. The absolute 
-* value of this parameter is in the range from 0x00u 
+* to the nearest value of multiple to 2400 nA, i.e 122400 nA. The absolute
+* value of this parameter is in the range from 0x00u
 * to \ref CY_CSDIDAC_MAX_CURRENT_NA.
 *
 * \param context
-* The pointer to the CSDIDAC middleware context 
+* The pointer to the CSDIDAC middleware context
 * structure \ref cy_stc_csdidac_context_t.
 *
 * \return
 * The function returns the status of its operation.
 * * CY_CSDIDAC_SUCCESS    - The operation is performed successfully.
-* * CY_CSDIDAC_BAD_PARAM  - The input pointer is NULL or an invalid parameter 
+* * CY_CSDIDAC_BAD_PARAM  - The input pointer is NULL or an invalid parameter
 *                           is passed.
 *
 *******************************************************************************/
@@ -744,11 +744,11 @@ cy_en_csdidac_status_t Cy_CSDIDAC_OutputEnable(
 *
 * This function performs the following:
 * * Verifies the input parameters.
-* * Configures and enables the specified output of CSDIDAC and returns the 
+* * Configures and enables the specified output of CSDIDAC and returns the
 *   status code.
 *
 * \param outputCh
-* CSDIDAC supports two outputs, this parameter specifies the output to 
+* CSDIDAC supports two outputs, this parameter specifies the output to
 * be enabled.
 *
 * \param polarity
@@ -762,13 +762,13 @@ cy_en_csdidac_status_t Cy_CSDIDAC_OutputEnable(
 * to \ref CY_CSDIDAC_MAX_CODE.
 *
 * \param context
-* The pointer to the CSDIDAC middleware context 
+* The pointer to the CSDIDAC middleware context
 * structure \ref cy_stc_csdidac_context_t.
 *
 * \return
 * The function returns the status of its operation.
 * * CY_CSDIDAC_SUCCESS    - The operation is performed successfully.
-* * CY_CSDIDAC_BAD_PARAM  - The input pointer is NULL or an invalid parameter 
+* * CY_CSDIDAC_BAD_PARAM  - The input pointer is NULL or an invalid parameter
 *                           is passed.
 *
 *******************************************************************************/
@@ -916,7 +916,7 @@ static void Cy_CSDIDAC_ConnectChannelB(
 * Disconnects the output channel A pin, if it is configured.
 *
 * \param context
-* The pointer to the CSDIDAC middleware context 
+* The pointer to the CSDIDAC middleware context
 * structure \ref cy_stc_csdidac_context_t.
 *
 *******************************************************************************/
@@ -945,7 +945,7 @@ static void Cy_CSDIDAC_DisconnectChannelA(cy_stc_csdidac_context_t * context)
 * Disconnects the output channel B pin, if it is configured.
 *
 * \param context
-* The pointer to the CSDIDAC middleware context 
+* The pointer to the CSDIDAC middleware context
 * structure \ref cy_stc_csdidac_context_t.
 *
 *******************************************************************************/
@@ -981,13 +981,13 @@ static void Cy_CSDIDAC_DisconnectChannelB(cy_stc_csdidac_context_t * context)
 * The channel to disconnect.
 *
 * \param context
-* The pointer to the CSDIDAC middleware context 
+* The pointer to the CSDIDAC middleware context
 * structure \ref cy_stc_csdidac_context_t.
 *
 * \return
 * The function returns the status of its operation.
 * * CY_CSDIDAC_SUCCESS    - The operation is performed successfully.
-* * CY_CSDIDAC_BAD_PARAM  - The input pointer is NULL or an invalid parameter 
+* * CY_CSDIDAC_BAD_PARAM  - The input pointer is NULL or an invalid parameter
 *                           is passed.
 *
 *******************************************************************************/
@@ -1014,7 +1014,7 @@ cy_en_csdidac_status_t Cy_CSDIDAC_OutputDisable(
     return (retVal);
 }
 
-#endif /* CY_IP_MXCSDV2 */
+#endif /* (defined(CY_IP_MXCSDV2) || defined(CY_IP_M0S8CSDV2)) */
 
 
 /* [] END OF FILE */

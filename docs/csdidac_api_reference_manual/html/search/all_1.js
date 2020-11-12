@@ -36,6 +36,7 @@ var searchData=
   ['cy_5fcsdidac_5flsb_5f75_5fidx',['CY_CSDIDAC_LSB_75_IDX',['../group__group__csdidac__enums.html#gga6a918f88641c524977f457bcfed6743ea939eda4dfe28682c05670916f10e40c3',1,'cy_csdidac.h']]],
   ['cy_5fcsdidac_5fmax_5fcode',['CY_CSDIDAC_MAX_CODE',['../group__group__csdidac__macros.html#ga2d7dda94153fedc16256295b59e962cd',1,'cy_csdidac.h']]],
   ['cy_5fcsdidac_5fmax_5fcurrent_5fna',['CY_CSDIDAC_MAX_CURRENT_NA',['../group__group__csdidac__macros.html#ga5975f4c5e4d22e842a4cd00128322e8b',1,'cy_csdidac.h']]],
+  ['cy_5fcsdidac_5fmw_5fversion',['CY_CSDIDAC_MW_VERSION',['../group__group__csdidac__macros.html#gaa13c574206a03b76ceec914dd444307f',1,'cy_csdidac.h']]],
   ['cy_5fcsdidac_5fmw_5fversion_5fmajor',['CY_CSDIDAC_MW_VERSION_MAJOR',['../group__group__csdidac__macros.html#ga9375f31416f3ad518a47e53a52a0bd36',1,'cy_csdidac.h']]],
   ['cy_5fcsdidac_5fmw_5fversion_5fminor',['CY_CSDIDAC_MW_VERSION_MINOR',['../group__group__csdidac__macros.html#ga9e48ea89b7352aeb1d4c9de2af0df9d2',1,'cy_csdidac.h']]],
   ['cy_5fcsdidac_5foutputdisable',['Cy_CSDIDAC_OutputDisable',['../group__group__csdidac__functions.html#ga7345b3e6b0090d3e53e68fd3f66ed09c',1,'Cy_CSDIDAC_OutputDisable(cy_en_csdidac_choice_t ch, cy_stc_csdidac_context_t *context):&#160;cy_csdidac.c'],['../group__group__csdidac__functions.html#ga7345b3e6b0090d3e53e68fd3f66ed09c',1,'Cy_CSDIDAC_OutputDisable(cy_en_csdidac_choice_t ch, cy_stc_csdidac_context_t *context):&#160;cy_csdidac.c']]],
@@ -57,5 +58,5 @@ var searchData=
   ['cy_5fstc_5fcsdidac_5fconfig_5ft',['cy_stc_csdidac_config_t',['../structcy__stc__csdidac__config__t.html',1,'']]],
   ['cy_5fstc_5fcsdidac_5fcontext_5ft',['cy_stc_csdidac_context_t',['../structcy__stc__csdidac__context__t.html',1,'']]],
   ['cy_5fstc_5fcsdidac_5fpin_5ft',['cy_stc_csdidac_pin_t',['../structcy__stc__csdidac__pin__t.html',1,'']]],
-  ['cypress_20csdidac_20middleware_20library',['Cypress CSDIDAC Middleware Library',['../index.html',1,'']]]
+  ['csdidac_20middleware_20library',['CSDIDAC Middleware Library',['../index.html',1,'']]]
 ];

@@ -22,13 +22,14 @@ The following resources contain more information:
 * [CSDIDAC Middleware RELEASE.md](./RELEASE.md)
 * [CSDIDAC Middleware API Reference Guide](https://cypresssemiconductorco.github.io/csdidac/csdidac_api_reference_manual/html/index.html)
 * [ModusToolbox Software Environment, Quick Start Guide, Documentation, and Videos](https://www.cypress.com/products/modustoolbox-software-environment)
-* [CSDIDAC Middleware Code Example for MBED OS](https://github.com/cypresssemiconductorco)
-* [CSDIDAC Middleware Code Examples at GITHUB](https://github.com/cypresssemiconductorco)
+* [CSDIDAC Middleware Code Example for MBED OS](https://github.com/cypresssemiconductorco/mbed-os-example-csdidac)
 * [ModusToolbox Device Configurator Tool Guide](https://www.cypress.com/ModusToolboxDeviceConfig)
 * [CapSense Middleware API Reference Guide](https://cypresssemiconductorco.github.io/capsense/capsense_api_reference_manual/html/index.html)
 * [CSDADC Middleware API Reference Guide](https://cypresssemiconductorco.github.io/csdadc/csdadc_api_reference_manual/html/index.html)
 * [PSoC 6 Technical Reference Manual](https://www.cypress.com/documentation/technical-reference-manuals/psoc-6-mcu-psoc-63-ble-architecture-technical-reference)
 * [PSoC 63 with BLE Datasheet Programmable System-on-Chip datasheet](http://www.cypress.com/ds218787)
+* [PSoC 4000S Family: PSoC 4 Architecture Technical Reference Manual (TRM)](https://www.cypress.com/documentation/technical-reference-manuals/psoc-4000s-family-psoc-4-architecture-technical-reference)
+* [PSoC 4100S and PSoC 4100S Plus: PSoC 4 Architecture Technical Reference Manual (TRM)](https://www.cypress.com/documentation/technical-reference-manuals/psoc-4100s-and-psoc-4100s-plus-psoc-4-architecture)
 * [Cypress Semiconductor](http://www.cypress.com)
   
 ---
